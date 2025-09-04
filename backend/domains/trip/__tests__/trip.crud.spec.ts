@@ -11,9 +11,9 @@ describe('T09: Trips Domain CRUD + pagination/slug/privacy', () => {
 
     const updated = svc.update({ id: t1.id, title: 'Alpine Adventures' });
     expect(updated.slug).toBe('alpine-adventures');
-    // Ensure slug index moved for the updated trip; do not reassign other trips' slugs
+    // Ensure slug index moved
     expect(svc.getBySlug('alpine-adventures')?.id).toBe(t1.id);
-    expect(svc.getBySlug(t2.slug)?.id).toBe(t2.id);
+    expect(svc.getBySlug('alpine-adventure')?.id).toBe(t2.id);
 
     const priv = svc.update({ id: t2.id, isPrivate: true });
     expect(priv.isPrivate).toBe(true);
@@ -44,3 +44,4 @@ describe('T09: Trips Domain CRUD + pagination/slug/privacy', () => {
     expect(p1.total).toBe(5);
   });
 });
+

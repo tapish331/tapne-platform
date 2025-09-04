@@ -2,7 +2,7 @@
 
 This repository hosts the Tapne monorepo. Tasks are implemented sequentially per `strictly_sequential_task_list.txt` with accompanying unit/integration and E2E tests.
 
-This README documents Task T01–T05 completion and how to run verification and tests.
+This README documents Task T01–T19 completion and how to run verification and tests.
 
 ## T01 — Monorepo & Tooling Bootstrap
 
@@ -558,7 +558,6 @@ npm run test:e2e -- tests/e2e/T13-moderation.spec.ts
 
 Notes:
 - Blocks are directional but filtering hides content symmetrically (if either user blocks the other, their trips are hidden for that viewer).
-- Mute is included as a UX helper and does not affect list filtering in this simplified backend.
 
 ---
 
@@ -665,3 +664,342 @@ npm run test:e2e -- tests/e2e/T16-auth-ui.spec.ts
 
 Notes:
 - These stubs are intentionally minimal to satisfy tests and document intended structure without pulling in `react`/`next` runtime dependencies yet. Later tasks can progressively enhance pages to real UI and wire the client to real backend endpoints.
+
+---
+
+## T17 — Home Page (Public + Personalized)
+
+Goal: Render public Home sections for all visitors and include personalized carousels for logged-in users. Implement minimal, deterministic helpers and query stubs to keep unit/e2e tests fast and environment-free.
+
+What’s included:
+- `frontend/web/app/page.tsx` — exports `metadata` and a `HomePage` function returning a composition object `{ kind: 'page', page: 'home', sections: { public, personalized? } }` without JSX.
+- `frontend/web/features/home/index.ts` — small helpers: `makeTripCard`, `makeProfileCard`, and `loading`.
+- `frontend/web/lib/server/home.queries.ts` — deterministic stubs `fetchPublicHome()` and `fetchPersonalizedHome(userId)` used by the Home page composition.
+
+Tests:
+- Unit: `frontend/web/features/home/__tests__/home.render.test.tsx` — asserts metadata presence, composition shape, deterministic query outputs, and helper factories.
+- E2E: `tests/e2e/T17-home-personalized.spec.ts` — filesystem-level checks for file presence and expected exports/content.
+
+Run just the T17 unit test:
+```
+cd frontend/web
+npm run test -- features/home/__tests__/home.render.test.tsx
+```
+
+Run just the T17 E2E test:
+```
+npm run test:e2e -- tests/e2e/T17-home-personalized.spec.ts
+```
+
+Or run the full suite from the repo root:
+```
+npm run verify:tasks
+npm run test:all
+```
+
+---
+
+## T18 — Search Page (Public Limited → Full on Auth)
+
+Goal: Expose a public Search page that returns limited fields for unauthenticated visitors and full fields plus actions (e.g., bookmark allowed) for authenticated users. Keep the implementation deterministic and free of runtime React/Next dependencies for fast tests.
+
+What’s included:
+- `frontend/web/app/search/page.tsx` — exports `metadata` and a `SearchPage` function returning a composition object `{ kind: 'page', page: 'search', mode: 'public'|'auth', results }` without JSX.
+- `frontend/web/features/search/index.ts` — small helpers: `makeFilters`, `renderResultItem`, and `canBookmark` (true for trip items when authenticated).
+- `frontend/web/lib/server/search.queries.ts` — deterministic stubs `fetchPublicSearch(q?)` and `fetchAuthSearch(userId, q?)` used by the Search page composition; public results omit sensitive fields.
+
+Tests:
+- Unit: `frontend/web/features/search/__tests__/search.visibility.test.tsx` — asserts metadata presence, composition shape and modes, deterministic query outputs (limited vs full), and helper factories.
+- E2E: `tests/e2e/T18-search-visibility.spec.ts` — filesystem-level checks for Search file presence and expected exports/content.
+
+Run just the T18 unit test:
+```
+cd frontend/web
+npm run test -- features/search/__tests__/search.visibility.test.tsx
+```
+
+Run just the T18 E2E test:
+```
+npm run test:e2e -- tests/e2e/T18-search-visibility.spec.ts
+```
+
+Or run the full suite from the repo root:
+```
+npm run verify:tasks
+npm run test:all
+```
+
+Notes:
+- Public search results include only limited fields (e.g., Trip: `id`, `title`, `slug`; Profile: `userId`, `username`).
+- Authenticated search results include full details (e.g., Trip: `ownerId`, `createdAt`; Profile: `bio`).
+- The helpers are intentionally minimal to exercise behavior in tests without pulling UI dependencies.
+
+---
+
+## T19 — Trip Page (Protected) + Owner CRUD + Reviews + Bookmark
+
+Goal: Provide a protected Trip detail page with an owner editor workflow, a simple user review flow (one per user; owners cannot review their own trip), and a bookmark toggle. Keep everything deterministic and free of React/Next runtime to run quickly under unit tests and integrate with the existing monorepo test harness.
+
+What’s included:
+- Trip pages (no JSX, just composition objects):
+  - `frontend/web/app/trip/[slug]/page.tsx` — exports `metadata` and a `TripPage({ slug, userId? })` returning `{ kind: 'page', page: 'trip', protected: true, slug, trip?, ownerView }`.
+  - `frontend/web/app/trip/new/page.tsx` — exports `metadata` and `NewTripPage({ userId? })` returning `{ kind: 'page', page: 'trip-new', protected: true, draft }`.
+- Feature helpers:
+  - `frontend/web/features/trip/TripView.tsx` — `toViewModel(trip, currentUserId)` sets `canEdit`, `canReview`, and `canBookmark` flags based on ownership and auth.
+  - `frontend/web/features/trip/OwnerEditor.tsx` — owner editor helpers: `emptyDraft()` and `applyDraftPatch(draft, patch)`.
+  - `frontend/web/features/trip/ReviewForm.tsx` — review helpers: `makeReviewDraft()` and `validateReview()` (rating 1–5).
+- Deterministic in-memory server stubs:
+  - `frontend/web/lib/server/trip.mutations.ts` — trip CRUD and actions:
+    - `newTripDraft()` — blank draft
+    - `createTrip(ownerId, { title, isPrivate? })` — slugify with collision handling, returns a `trip` record
+    - `updateTrip(ownerId, slug, { title?, isPrivate? })` — owner-only; updates title and re-slugs when changed
+    - `getTripBySlug(slug)` — fetch a stored trip
+    - `toggleBookmark(userId, slug)` and `listBookmarks(userId)` — per-user bookmark set
+    - `submitReview(userId, slug, rating, text)` — enforces rules: owner cannot review; one per user per trip; `listReviews(slug)` returns reviews
+
+Tests:
+- Unit: `frontend/web/features/trip/__tests__/trip.actions.test.tsx` — covers trip page metadata/composition, create→update slug change, permissions view model, bookmark toggle, review rules, and page ownerView logic.
+- E2E: The monorepo scaffolding expects a future `tests/e2e/T19-trip-crud-review.spec.ts`; the current kata focuses on the deterministic unit-level coverage above to keep runs fast and hermetic.
+
+Run just the T19 unit test:
+```
+cd frontend/web
+npm run test -- features/trip/__tests__/trip.actions.test.tsx
+```
+
+Or run the full suite from the repo root:
+```
+npm run verify:tasks
+npm run test:all
+```
+
+---
+
+## T20 — Profile Page (Protected) + Visibility Toggles + Follow
+
+Goal: Provide a protected Profile page with a Hero and Body composition, per-section visibility toggles, and client-side follow/unfollow counters. Logic is pure and deterministic (no JSX, no network calls) to keep tests fast and hermetic.
+
+What’s included:
+- Profile page composition (no JSX):
+  - `frontend/web/app/profile/[username]/page.tsx` — exports `metadata` and default `ProfilePage(props)` returning `{ kind: 'page', page: 'profile', protected: true, username, profile, ownerView }`.
+- Feature helpers:
+  - `frontend/web/features/profile/Hero.tsx` — `makeHero(viewerId, username)` computes counts, `isOwner`, `canFollow`; `toggleFollowFromHero()` proxies to mutation.
+  - `frontend/web/features/profile/Body.tsx` — `buildBody(visibility)` returns included sections based on visibility flags.
+  - `frontend/web/features/profile/VisibilityToggles.tsx` — `defaultVisibility()`, `applyVisibilityPatch()`, `isSectionVisible()`.
+- Deterministic server stubs:
+  - `frontend/web/lib/server/profile.mutations.ts` — in-memory store for profiles, visibility, and follows; exports `getProfileByUsername`, `updateVisibility`, `follow`, `unfollow`, `toggleFollow`, `getCounts`.
+
+Tests for this task:
+- Unit (Vitest): `frontend/web/features/profile/__tests__/profile.visibility.test.tsx` — validates page composition, visibility helpers, body builder, and follow/unfollow counters including self-follow restriction.
+- E2E (Playwright): `tests/e2e/T20-profile-follow.spec.ts` — asserts presence and expected exports across T20 files.
+
+Run just the T20 unit test:
+```
+cd frontend/web
+npm run test -- features/profile/__tests__/profile.visibility.test.tsx
+```
+
+Run just the T20 E2E test:
+```
+npm run test:e2e -- tests/e2e/T20-profile-follow.spec.ts
+```
+
+Notes:
+- Owner is modeled as the viewer whose `userId` equals the `username`.
+- Follow data and profile visibility settings are stored in-memory to keep runs hermetic.
+
+---
+
+## T21 — Upload UI (Presigned) for Profile Photo & Trip Cover
+
+Goal: Provide a lightweight, test-friendly upload flow on the frontend to handle profile photos and trip cover images using presigned uploads, with thumbnail previews and simple integration points in profile and trip editors.
+
+What’s included:
+- Frontend media client and helpers:
+  - `frontend/web/lib/server/media.client.ts` — pure functions for `presignUpload`, `uploadToUrl` (no-op in this kata), and `confirmUpload`. Mirrors backend key/URL formats without requiring network calls so unit tests stay fast and deterministic.
+  - `frontend/web/features/media/UploadImage.tsx` — validation (`validateImage`), orchestration (`prepareAndUpload`), and a `simulateDrop` helper used by tests.
+- Integrations:
+  - `frontend/web/features/profile/Hero.tsx` — adds `updateProfilePhoto(ownerUsername, file, client?)` which uses `prepareAndUpload` and returns `{ ok, photoUrl, thumbnailUrl }`.
+  - `frontend/web/features/trip/OwnerEditor.tsx` — adds `updateCoverImage(slug, file, client?)` returning `{ ok, coverUrl, thumbnailUrl }`.
+
+Behavior and formats:
+- Validation: accepts `image/jpeg`, `image/png`, `image/webp` up to 5 MB by default (configurable via `UploadLimits`).
+- Presign result: `{ key, uploadUrl, publicUrl }` where `key` matches `uploads/images/YYYY/MM/DD/<hex>.<ext>` and `publicUrl` is `${MEDIA_CDN_URL}/${key}` (defaults to `https://cdn.local`).
+- Confirm result: generates a thumbnail key mirroring backend rules: directory `/images/` → `/images/thumbs/`, filename gains `-thumb.jpg` suffix. Returns `{ ok, key, thumbnail: { key, url } }`.
+
+Examples:
+```ts
+import { validateImage, prepareAndUpload } from 'frontend/web/features/media/UploadImage';
+
+const file = new Blob([new Uint8Array([1,2,3])], { type: 'image/png' });
+(file as any).name = 'cover.png';
+
+const valid = validateImage({ type: (file as any).type, size: 1024, name: (file as any).name });
+if (valid.ok) {
+  const res = await prepareAndUpload(file);
+  console.log(res.url, res.thumbnailUrl);
+}
+```
+
+Run just T21 unit test:
+```
+cd frontend/web
+npm run test -- features/media/__tests__/upload.widget.test.tsx
+```
+
+Run just T21 E2E presence test:
+```
+npm run test:e2e -- tests/e2e/T21-upload-images.spec.ts
+```
+- Mute is included as a UX helper and does not affect list filtering in this simplified backend.
+
+---
+
+## T22 — SEO/Slugs/OG & Robots (Noindex on Gated)
+
+Goal: Add SEO-friendly artifacts while keeping auth-gated pages hidden from indexing. Provide robots rules, OG image stubs for Trip and Profile, and a sitemap limited to public routes.
+
+What’s included:
+- Robots helpers:
+  - `frontend/web/app/robots.ts` — exports `robotsRules` with `allow: ['/', '/search']` and `disallow: ['/trip', '/profile', '/account']`, plus `buildRobotsTxt(baseUrl)`.
+- OpenGraph image stubs (no JSX/runtime needed):
+  - `frontend/web/app/trip/[slug]/opengraph-image.tsx` — `buildOgImageForTrip(slug)` returns `{ kind: 'og-image', page: 'trip', width: 1200, height: 630, title, slug }`.
+  - `frontend/web/app/profile/[username]/opengraph-image.tsx` — `buildOgImageForProfile(username)` returns `{ kind: 'og-image', page: 'profile', ... }`.
+- Sitemap generator:
+  - `frontend/web/app/(seo)/sitemap.ts` — `generateSitemap(baseUrl)` returns `{ urls: [base+'/', base+'/search'] }`.
+- Noindex on gated pages:
+  - `frontend/web/app/trip/[slug]/page.tsx` and `frontend/web/app/profile/[username]/page.tsx` metadata include `robots: { index: false, follow: false }`.
+
+Tests:
+- Unit: `frontend/web/__tests__/seo.flags.test.ts` — verifies robots rules/text, noindex on protected pages, OG image specs, and sitemap contents.
+- E2E (presence/content): `tests/e2e/T22-seo-noindex.spec.ts` — asserts files exist and include expected exports and metadata.
+
+Run just T22 unit test:
+```
+cd frontend/web
+npm run test -- __tests__/seo.flags.test.ts
+```
+
+Run just T22 E2E presence test:
+```
+npm run test:e2e -- tests/e2e/T22-seo-noindex.spec.ts
+```
+
+Notes:
+- Only Home (`/`) and Search (`/search`) are included in the sitemap and allowed for robots.
+- Gated pages remain protected and marked `noindex` via metadata.
+
+---
+
+## T23 — Moderation UX Hooks (Report/Block) + Filtering
+
+Goal: Provide simple, framework-agnostic moderation UI models for reporting and blocking, wire moderation permissions into Trip and Profile views, and ensure search results respect a viewer’s block list. All implementations are pure functions for deterministic unit tests.
+
+What’s included:
+- Moderation UI files:
+  - `frontend/web/features/moderation/ReportButton.tsx` — exports `makeReportButton()` returning a confirmable model and `reportEntity(reporterId, entity, targetId, reason)` which records a report; `listReports()` exposes recorded reports for tests.
+  - `frontend/web/features/moderation/BlockButton.tsx` — in-memory blocklists per viewer with `makeBlockButton(viewerId, targetUserId)`, `toggleBlock`, `isBlocked`, `canBlockUser`, `canReportTrip`, and `filterSearchResultsForBlocked(viewerId, results)`.
+- Wiring into existing features:
+  - `frontend/web/features/trip/TripView.tsx` — adds `attachModeration(viewModel, trip, currentUserId)` which augments the Trip view model with `canReport` and `canBlock` (owner excluded).
+  - `frontend/web/features/profile/Hero.tsx` — adds `attachModerationToHero(heroModel, viewerId)` exposing `canBlock` (self excluded).
+  - `frontend/web/features/search/index.ts` — adds `applyBlockFilter(viewerId, results)` delegating to moderation filtering.
+
+Tests:
+- Unit: `frontend/web/features/moderation/__tests__/moderation.ui.test.tsx` — exercises report confirmation/recording, block toggling, search filtering against blocklists, and Trip/Profile moderation permission helpers.
+- E2E (presence/content): `tests/e2e/T23-moderation-ui.spec.ts` — asserts moderation files exist and include expected exports, and that TripView/Hero/Search expose moderation wiring helpers.
+
+Run just T23 unit test:
+```
+cd frontend/web
+npm run test -- features/moderation/__tests__/moderation.ui.test.tsx
+```
+
+Run just T23 E2E presence test:
+```
+npm run test:e2e -- tests/e2e/T23-moderation-ui.spec.ts
+```
+
+Notes:
+- These UI models are intentionally minimal and do not trigger network calls; they enable deterministic unit tests while reflecting the product behavior (report/block actions and filtering) at a high level.
+- Search filtering removes profiles by `userId` and trips by `ownerId` when available; public search retains trips since owner information is not present in that mode.
+
+---
+
+## T24 — Observability & Errors (Request IDs, Structured Logs, Error Boundaries)
+
+Goal: Add thin, framework-agnostic observability primitives to the backend and error boundaries to the frontend. Every response can carry a `X-Request-Id`, errors are formatted consistently as JSON with a `requestId`, and the frontend surfaces friendly error pages and structured client logs.
+
+What’s included:
+- Backend common utilities:
+  - `backend/src/common/logging.interceptor.ts` — `attachLogging(req, res)` sets `X-Request-Id`, returns `{ requestId, log(level,msg,ctx), done() }`. Also exports `LoggingInterceptor` and `generateRequestId()`.
+  - `backend/src/common/http-exception.filter.ts` — `HttpExceptionFilter.handle(req, res, error, requestId?)` sets JSON error body `{ ok: false, error, requestId }` and status (uses `error.statusCode`/`error.status` when present; defaults to 500).
+- Backend wiring:
+  - `backend/src/main.ts` — imports and applies `attachLogging` at request start, includes `X-Request-Id` on responses, and uses `HttpExceptionFilter` in the top-level error handler. Successful and 404 responses call the `done()` hook.
+- Frontend error handling & logging:
+  - `frontend/web/app/error.tsx` — segment error boundary with reset handler.
+  - `frontend/web/app/global-error.tsx` — top-level error boundary (client) with lightweight console logging.
+  - `frontend/web/lib/log.ts` — `logEvent`, `logError`, `withRequestId` helpers for structured client logs.
+
+Tests:
+- Unit: `backend/src/common/__tests__/exception.filter.spec.ts` — verifies that unknown errors produce a 500 JSON payload with `requestId`, and that explicit `statusCode` on the error is respected.
+- E2E (presence/content): `tests/e2e/T24-errors-observability.spec.ts` — asserts the new files exist and include expected exports and integration hints (`X-Request-Id` headers and `HttpExceptionFilter` usage in `main.ts`).
+
+Run just T24 unit test:
+```
+cd backend
+npm run test -- src/common/__tests__/exception.filter.spec.ts
+```
+
+Run just T24 E2E presence test:
+```
+npm run test:e2e -- tests/e2e/T24-errors-observability.spec.ts
+```
+
+Notes:
+- The backend continues to use a lightweight Node HTTP server; these utilities mimic NestJS patterns without introducing framework dependencies.
+- `X-Request-Id` is generated when not provided by the client and is echoed in JSON error responses to aid correlation across logs.
+
+---
+
+## T25 — Docker Compose, Seeds, CI
+
+Goal: Provide a simple local orchestration with Docker Compose (database + app services), a deterministic seed script for demo data, and a GitHub Actions CI workflow that runs verification and the full test suite.
+
+What’s included:
+- Docker Compose: `docker-compose.yml`
+  - `db` (Postgres 15) exposed on `5432`
+  - `backend` (Node 18-alpine) running `npm --prefix backend run start:dev` and pointing `DATABASE_URL` at `db`
+  - `frontend` (Node 18-alpine) running `npm --prefix frontend/web run dev`
+  - `localstack` (optional) providing S3-compatible endpoint on `4566` for media features
+- Seed script: `backend/prisma/seed.ts`
+  - Exports `demoUsers`, `demoTrips`, `hashPassword()`, and `seed(prisma?)`
+  - `seed()` accepts a minimal Prisma-like object and upserts users, profiles, and trips using generated unique slugs; returns a summary `{ ok, counts }`
+  - Designed to run without a live DB for tests; can be invoked directly via `node`/`ts-node`
+- CI workflow: `.github/workflows/ci.yml`
+  - Triggers on `push` and `pull_request`
+  - Installs dependencies, installs Playwright browsers, runs `npm run verify:tasks` and `npm run test:all`
+
+Quick start with Docker Compose (optional):
+```
+docker compose up -d db
+# optional services
+docker compose up -d localstack
+```
+
+Run seeds (no DB required for test mode):
+```
+node backend/prisma/seed.ts
+```
+
+CI locally (what GitHub Actions runs):
+```
+npm run verify:tasks
+npm run test:all
+```
+
+Tests for this task:
+- Unit (Vitest): `backend/src/__tests__/seed.spec.ts` — asserts seed file presence, exports, and runs `seed()` against a mock Prisma object
+- E2E (Playwright): `tests/e2e/T25-full-happy-path.spec.ts` — asserts docker-compose, seed, and CI workflow exist with expected content and that `seed()` produces counts
+
+Notes:
+- The compose services for backend/frontend are placeholders aligned with this kata’s lightweight server stubs. They demonstrate environment wiring and cannot serve production traffic without further implementation.

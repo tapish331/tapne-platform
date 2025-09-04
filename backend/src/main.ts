@@ -1,5 +1,7 @@
 import http from 'node:http';
 import { getHealth } from './health/health.controller';
+import { attachLogging } from './common/logging.interceptor';
+import { HttpExceptionFilter } from './common/http-exception.filter';
 import { AuthService } from '../domains/auth/auth.service';
 import { AuthController } from '../domains/auth/auth.controller';
 import { EmailController } from '../domains/auth/controllers/email.controller';
@@ -61,6 +63,9 @@ export function createServer() {
   const followService = new FollowService();
   const followController = new FollowController(followService);
   const server = http.createServer(async (req, res) => {
+    const { requestId, log, done } = attachLogging(req, res);
+    // Ensure header is explicitly present (observability)
+    try { res.setHeader('X-Request-Id', requestId); } catch {}
     // Basic CORS for health check
     res.setHeader('Access-Control-Allow-Origin', '*');
     // Security headers (minimal Helmet-like hardening)
@@ -83,6 +88,7 @@ export function createServer() {
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json');
       res.end(body);
+      done();
       return;
     }
 
@@ -104,13 +110,13 @@ export function createServer() {
           res.statusCode = 400;
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify({ ok: false, error: 'Invalid CAPTCHA' }));
+          done();
           return;
         }
       }
     } catch (e) {
-      res.statusCode = 400;
-      res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify({ ok: false, error: String((e as Error).message || e) }));
+      new HttpExceptionFilter().handle(req, res, e, requestId);
+      done();
       return;
     }
 
@@ -162,11 +168,17 @@ export function createServer() {
         if (handled) return; // already handled
         res.statusCode = 404;
         res.end('Not Found');
+        done();
       })
       .catch((err) => {
-        res.statusCode = 400;
-        res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ ok: false, error: String(err?.message || err) }));
+        new HttpExceptionFilter().handle(req, res, err, requestId);
+      })
+      .finally(() => {
+        try {
+          done();
+        } catch {
+          /* ignore */
+        }
       });
     return;
 

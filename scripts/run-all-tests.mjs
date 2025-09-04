@@ -35,8 +35,9 @@ const run = (cmd, opts = {}) => {
   return res.status ?? 1;
 };
 
+// Include both tracked and untracked (respects .gitignore) so freshly added tests run
 const gitTrackedFiles = () =>
-  execSync("git ls-files", { cwd: ROOT, encoding: "utf8" })
+  execSync("git ls-files -co --exclude-standard", { cwd: ROOT, encoding: "utf8" })
     .split("\n")
     .map((s) => s.trim())
     .filter(Boolean)

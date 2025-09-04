@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { uniqueSlug } from '../../src/utils/slug';
+import { uniqueSlug, basicSlugify } from '../../src/utils/slug';
 
 export type TripInput = {
   ownerId: string;
@@ -49,8 +49,8 @@ export interface BlockProvider {
 export class TripService {
   private byId = new Map<string, TripRecord>();
   private bySlug = new Map<string, TripRecord>();
-  private lastTs = 0;
   private blockProvider?: BlockProvider;
+  private lastTs = 0;
 
   constructor(blockProvider?: BlockProvider) {
     this.blockProvider = blockProvider;
@@ -68,8 +68,8 @@ export class TripService {
     if (!title || typeof title !== 'string' || title.trim().length < 3) throw new Error('title is required');
 
     const slug = uniqueSlug(title, (s) => this.bySlug.has(s));
-    const nowRaw = Date.now();
-    const now = nowRaw > this.lastTs ? nowRaw : this.lastTs + 1;
+    let now = Date.now();
+    if (now <= this.lastTs) now = this.lastTs + 1;
     this.lastTs = now;
     const rec: TripRecord = {
       id: crypto.randomUUID(),
@@ -92,12 +92,16 @@ export class TripService {
 
     if (typeof input.title === 'string' && input.title.trim().length >= 3 && input.title !== rec.title) {
       // re-slug on title change
+      const oldSlug = rec.slug;
+      const oldBase = basicSlugify(rec.title);
       const newSlug = uniqueSlug(input.title, (s) => this.bySlug.has(s) && this.bySlug.get(s)?.id !== rec.id);
-      // swap slug indices
-      this.bySlug.delete(rec.slug);
+      // swap slug indices for the updated record
+      this.bySlug.delete(oldSlug);
       rec.title = input.title;
       rec.slug = newSlug;
       this.bySlug.set(rec.slug, rec);
+      // if the old base was freed, rebalance that group so the lowest-suffix occupant takes the base
+      this.rebalanceSlugGroup(oldBase);
     }
 
     if (typeof input.isPrivate === 'boolean') {
@@ -155,5 +159,36 @@ export class TripService {
     const start = (page - 1) * pageSize;
     const pageItems = items.slice(start, start + pageSize).map((i) => ({ ...i }));
     return { items: pageItems, total, page, pageSize };
+  }
+
+  private rebalanceSlugGroup(base: string) {
+    const members: { suffix: number; rec: TripRecord }[] = [];
+    // Collect all members that match base or base-N (N>=2)
+    for (const [slug, rec] of this.bySlug.entries()) {
+      if (slug === base) {
+        members.push({ suffix: 1, rec });
+        continue;
+      }
+      if (slug.startsWith(base + '-')) {
+        const tail = slug.slice(base.length + 1);
+        if (/^\d+$/.test(tail)) {
+          const n = parseInt(tail, 10);
+          if (n >= 2) members.push({ suffix: n, rec });
+        }
+      }
+    }
+    if (!members.length) return;
+    members.sort((a, b) => a.suffix - b.suffix);
+    // Reassign slugs to contiguous sequence base, base-2, base-3, ...
+    for (let i = 0; i < members.length; i++) {
+      const desired = i === 0 ? base : `${base}-${i + 1}`;
+      const m = members[i];
+      if (m.rec.slug !== desired) {
+        // update mapping
+        this.bySlug.delete(m.rec.slug);
+        m.rec.slug = desired;
+        this.bySlug.set(desired, m.rec);
+      }
+    }
   }
 }

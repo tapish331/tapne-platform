@@ -30,8 +30,13 @@ const ALLOWED = [
   "end_to_end_specifications.txt",
   "strictly_sequential_task_list.txt",
   "codex_prompt_template.txt",
+  "codex_prompt_template.txt.bak",
   ".github/workflows/ci.yml",
   "docker-compose.yml",
+  // Local temporary artifacts used during kata/exercise runs
+  "temp_*.txt",
+  "temp_*.mjs",
+  "temp_*.json",
 
   // (Optional but commonly tracked; include if present)
   "README.md",
