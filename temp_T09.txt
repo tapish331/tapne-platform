@@ -1,0 +1,63 @@
+import { test, expect } from '@playwright/test';
+import { createServer } from '../../backend/src/main';
+
+test.describe('T09: Trip CRUD + privacy + pagination', () => {
+  test('create, get by slug, update title->slug, list with privacy', async () => {
+    const server = createServer();
+    await new Promise<void>((resolve) => server.listen(0, resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('Failed to bind server');
+    const baseUrl = `http://127.0.0.1:${address.port}`;
+
+    // Create two trips with same title -> slug2 should have suffix
+    const mkTrip = async (payload: any) => {
+      const resp = await fetch(`${baseUrl}/trip/create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      expect(resp.status).toBe(201);
+      const json = (await resp.json()) as { ok: boolean; trip: any };
+      expect(json.ok).toBe(true);
+      return json.trip;
+    };
+
+    const t1 = await mkTrip({ ownerId: 'u1', title: 'Alpine Adventure' });
+    expect(t1.slug).toBe('alpine-adventure');
+    const t2 = await mkTrip({ ownerId: 'u2', title: 'Alpine Adventure', isPrivate: true });
+    expect(t2.slug).toBe('alpine-adventure-2');
+
+    // GET by slug
+    const get1 = await fetch(`${baseUrl}/trip/${encodeURIComponent(t1.slug)}`);
+    expect(get1.status).toBe(200);
+    const g1 = (await get1.json()) as { ok: boolean; trip: any };
+    expect(g1.trip.id).toBe(t1.id);
+
+    // Update title -> slug changes
+    const upd = await fetch(`${baseUrl}/trip/update`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: t1.id, title: 'Alpine Adventures' }),
+    });
+    expect(upd.status).toBe(200);
+    const u = (await upd.json()) as { ok: boolean; trip: any };
+    expect(u.trip.slug).toBe('alpine-adventures');
+
+    // List: default excludes private
+    const list1 = await fetch(`${baseUrl}/trip`);
+    expect(list1.status).toBe(200);
+    const l1 = (await list1.json()) as { ok: boolean; items: any[]; total: number };
+    expect(l1.items.find((x) => x.id === t2.id)).toBeFalsy();
+    expect(l1.total).toBe(1);
+
+    // List including private for owner u2
+    const list2 = await fetch(`${baseUrl}/trip?includePrivateForOwnerId=u2&sort=title&order=asc`);
+    expect(list2.status).toBe(200);
+    const l2 = (await list2.json()) as { ok: boolean; items: any[]; total: number };
+    expect(l2.items.find((x) => x.id === t2.id)).toBeTruthy();
+
+    await new Promise<void>((resolve, reject) => server.close((e) => (e ? reject(e) : resolve())));
+  });
+});
+
+

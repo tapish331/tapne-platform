@@ -1,0 +1,14 @@
+thoroughly analyze the following files:
+1: end_to_end_specifications.txt
+2: strictly_sequential_task_list.txt
+
+check the implementation status of task 01, and finish it to make the task complete end 2 end fully functional through:
+1: implementing all the functional files stated in the task
+2: implementing all the test files stated in the task that can be run along with rest of the existing tests using 'npm run test:all' from root
+3: updating README.md with thorough information about the task.
+
+reiterate until both of these commands returns 0 errors and 0 warnings:
+1: npm run verify:tasks
+2: npm run test:all
+
+please tell whether you were able to complete the task and corresponding tests complete end 2 end fully functional or do you need another attempt.

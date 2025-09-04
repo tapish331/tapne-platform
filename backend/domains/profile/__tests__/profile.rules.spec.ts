@@ -1,0 +1,36 @@
+import { describe, it, expect } from 'vitest';
+import { ProfileService } from '../../profile/profile.service';
+
+describe('T08: Profiles Domain rules', () => {
+  it('creates a profile with defaults and enforces case-insensitive username uniqueness', () => {
+    const svc = new ProfileService({ RESERVED_HANDLES: 'admin,root' } as any);
+    const p1 = svc.create({ userId: 'u1', username: 'Alice' });
+    expect(p1.username).toBe('Alice');
+    expect(p1.showUpcomingTrips).toBe(true);
+    expect(p1.showRecentReviews).toBe(true);
+    expect(p1.showOrganizedTrips).toBe(true);
+    expect(p1.showPastAttendance).toBe(true);
+
+    expect(() => svc.create({ userId: 'u2', username: 'alice' })).toThrow();
+  });
+
+  it('rejects reserved handles', () => {
+    const svc = new ProfileService({ RESERVED_HANDLES: 'admin,root' } as any);
+    expect(() => svc.create({ userId: 'u3', username: 'admin' })).toThrow();
+  });
+
+  it('updates profile fields and toggles visibility', () => {
+    const svc = new ProfileService();
+    const p = svc.create({ userId: 'u9', username: 'traveler' });
+    const u1 = svc.update({ userId: 'u9', bio: 'Love hiking', showPastAttendance: false });
+    expect(u1.bio).toBe('Love hiking');
+    expect(u1.showPastAttendance).toBe(false);
+
+    const u2 = svc.update({ userId: 'u9', username: 'TravelerX' });
+    expect(u2.username).toBe('TravelerX');
+    // Lookup by lowercase new handle should work
+    const g = svc.getByUsername('travelerx');
+    expect(g?.userId).toBe('u9');
+  });
+});
+

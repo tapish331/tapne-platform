@@ -1,0 +1,9 @@
+{
+  "name": "@tapne/backend",
+  "private": true,
+  "scripts": {
+    "test": "node ../node_modules/vitest/vitest.mjs --run",
+    "start:dev": "node -e \"console.log('backend dev placeholder - start server via tests for now')\""
+  }
+}
+

@@ -1,0 +1,10 @@
+{
+  "name": "@tapne/web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node -e \"console.log('Next.js dev placeholder - app bootstrap only')\"",
+    "build": "node -e \"console.log('Next.js build placeholder - app bootstrap only')\"",
+    "test": "node ../../node_modules/vitest/vitest.mjs --run"
+  }
+}

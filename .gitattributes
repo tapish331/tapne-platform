@@ -1,0 +1,10 @@
+* text=auto eol=lf
+
+# Normalize TypeScript/JS
+*.ts text
+*.tsx text
+*.js text
+*.jsx text
+*.mjs text
+*.cjs text
+

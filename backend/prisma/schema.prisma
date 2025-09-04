@@ -1,0 +1,151 @@
+// Prisma schema for Tapne Platform (T03)
+// Provider: PostgreSQL; URL comes from env var DATABASE_URL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums
+enum TokenType {
+  VERIFY_EMAIL
+  RESET_PASSWORD
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  profile        Profile?
+  trips          Trip[]        @relation("TripOwner")
+  reviews        TripReview[]
+  bookmarks      Bookmark[]
+  participations Participation[]
+  following      Follow[]      @relation("Following")
+  followers      Follow[]      @relation("Followers")
+  reports        Report[]      @relation("Reporter")
+  reportsReceived Report[]     @relation("ReportedUser")
+  blocksAsBlocker Block[]      @relation("Blocker")
+  blocksAsBlocked Block[]      @relation("Blocked")
+  tokens         Token[]
+}
+
+model Profile {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  // Use case-insensitive text for username to enforce unique handles regardless of case
+  username  String   @unique @db.Citext
+  bio       String?
+  pronouns  String?
+  style     String?
+
+  // Visibility settings (as simple booleans for MVP)
+  showUpcomingTrips   Boolean @default(true)
+  showRecentReviews   Boolean @default(true)
+  showOrganizedTrips  Boolean @default(true)
+  showPastAttendance  Boolean @default(true)
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Trip {
+  id        String   @id @default(uuid())
+  ownerId   String
+  title     String
+  slug      String   @unique
+  isPrivate Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner      User          @relation("TripOwner", fields: [ownerId], references: [id])
+  reviews    TripReview[]
+  bookmarks  Bookmark[]
+  attendees  Participation[]
+  reports    Report[]
+}
+
+model TripReview {
+  id        String   @id @default(uuid())
+  tripId    String
+  userId    String
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+
+  trip Trip @relation(fields: [tripId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([tripId, userId])
+}
+
+model Follow {
+  followerId String
+  followeeId String
+
+  follower User @relation("Following", fields: [followerId], references: [id])
+  followee User @relation("Followers", fields: [followeeId], references: [id])
+
+  @@id([followerId, followeeId])
+}
+
+model Bookmark {
+  userId String
+  tripId String
+
+  user User @relation(fields: [userId], references: [id])
+  trip Trip @relation(fields: [tripId], references: [id])
+
+  @@id([userId, tripId])
+}
+
+model Participation {
+  userId String
+  tripId String
+
+  user User @relation(fields: [userId], references: [id])
+  trip Trip @relation(fields: [tripId], references: [id])
+
+  @@id([userId, tripId])
+}
+
+model Report {
+  id          String   @id @default(uuid())
+  reporterId  String
+  subjectUserId String?
+  subjectTripId String?
+  reason      String
+  createdAt   DateTime @default(now())
+
+  reporter User @relation("Reporter", fields: [reporterId], references: [id])
+  subjectUser User? @relation("ReportedUser", fields: [subjectUserId], references: [id])
+  subjectTrip Trip? @relation(fields: [subjectTripId], references: [id])
+}
+
+model Block {
+  blockerId String
+  blockedId String
+
+  blocker User @relation("Blocker", fields: [blockerId], references: [id])
+  blocked User @relation("Blocked", fields: [blockedId], references: [id])
+
+  @@id([blockerId, blockedId])
+}
+
+model Token {
+  id        String    @id @default(uuid())
+  userId    String
+  type      TokenType
+  token     String    @unique
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}

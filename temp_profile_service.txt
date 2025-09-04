@@ -1,0 +1,159 @@
+import crypto from 'node:crypto';
+
+export type ProfileVisibility = {
+  showUpcomingTrips: boolean;
+  showRecentReviews: boolean;
+  showOrganizedTrips: boolean;
+  showPastAttendance: boolean;
+};
+
+export type ProfileInput = {
+  userId: string;
+  username: string;
+  bio?: string | null;
+  pronouns?: string | null;
+  style?: string | null;
+} & Partial<ProfileVisibility>;
+
+export type ProfileUpdate = {
+  userId: string;
+  username?: string;
+  bio?: string | null;
+  pronouns?: string | null;
+  style?: string | null;
+} & Partial<ProfileVisibility>;
+
+export type ProfileRecord = {
+  id: string;
+  userId: string;
+  username: string; // preserve case entered by user
+  bio: string | null;
+  pronouns: string | null;
+  style: string | null;
+} & ProfileVisibility;
+
+function defaultVisibility(): ProfileVisibility {
+  return {
+    showUpcomingTrips: true,
+    showRecentReviews: true,
+    showOrganizedTrips: true,
+    showPastAttendance: true,
+  };
+}
+
+function normalizeUsername(u: string): string {
+  return u.trim().toLowerCase();
+}
+
+function parseReserved(env: NodeJS.ProcessEnv): Set<string> {
+  const raw = env.RESERVED_HANDLES || env.RESERVED_USERNAMES || '';
+  const base = new Set(
+    raw
+      .split(',')
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean)
+  );
+  // Sensible defaults
+  const defaults = [
+    'admin',
+    'root',
+    'support',
+    'api',
+    'login',
+    'signup',
+    'account',
+    'profile',
+    'trip',
+    'trips',
+    'about',
+    'help',
+  ];
+  for (const d of defaults) base.add(d);
+  return base;
+}
+
+export class ProfileService {
+  private readonly reserved: Set<string>;
+  private byUser = new Map<string, ProfileRecord>();
+  private byUsername = new Map<string, ProfileRecord>(); // key: lower(username)
+
+  constructor(private readonly env: NodeJS.ProcessEnv = process.env) {
+    this.reserved = parseReserved(env);
+  }
+
+  get profileCount(): number {
+    return this.byUser.size;
+  }
+
+  private ensureUsernameAllowed(username: string): void {
+    const lower = normalizeUsername(username);
+    if (!/^[a-z0-9_.-]{3,30}$/.test(lower)) {
+      throw new Error('Invalid username format');
+    }
+    if (this.reserved.has(lower)) {
+      throw new Error('Username is reserved');
+    }
+    if (this.byUsername.has(lower)) {
+      throw new Error('Username already taken');
+    }
+  }
+
+  create(input: ProfileInput): ProfileRecord {
+    const { userId, username } = input;
+    if (!userId || !username) throw new Error('userId and username are required');
+    if (this.byUser.has(userId)) throw new Error('Profile already exists for user');
+    this.ensureUsernameAllowed(username);
+
+    const record: ProfileRecord = {
+      id: crypto.randomUUID(),
+      userId,
+      username,
+      bio: input.bio ?? null,
+      pronouns: input.pronouns ?? null,
+      style: input.style ?? null,
+      ...defaultVisibility(),
+    };
+
+    // Override default visibility with provided flags
+    for (const k of Object.keys(defaultVisibility()) as (keyof ProfileVisibility)[]) {
+      const v = (input as any)[k];
+      if (typeof v === 'boolean') (record as any)[k] = v;
+    }
+
+    this.byUser.set(userId, record);
+    this.byUsername.set(normalizeUsername(username), record);
+    return { ...record };
+  }
+
+  update(input: ProfileUpdate): ProfileRecord {
+    const { userId } = input;
+    const existing = this.byUser.get(userId);
+    if (!existing) throw new Error('Profile not found');
+
+    if (input.username && normalizeUsername(input.username) !== normalizeUsername(existing.username)) {
+      // Remove old username index, validate, then set new one
+      this.ensureUsernameAllowed(input.username);
+      this.byUsername.delete(normalizeUsername(existing.username));
+      existing.username = input.username;
+      this.byUsername.set(normalizeUsername(existing.username), existing);
+    }
+
+    if (typeof input.bio !== 'undefined') existing.bio = input.bio ?? null;
+    if (typeof input.pronouns !== 'undefined') existing.pronouns = input.pronouns ?? null;
+    if (typeof input.style !== 'undefined') existing.style = input.style ?? null;
+
+    for (const k of Object.keys(defaultVisibility()) as (keyof ProfileVisibility)[]) {
+      const v = (input as any)[k];
+      if (typeof v === 'boolean') (existing as any)[k] = v;
+    }
+
+    return { ...existing };
+  }
+
+  getByUsername(username: string): ProfileRecord | undefined {
+    const found = this.byUsername.get(normalizeUsername(username));
+    return found ? { ...found } : undefined;
+  }
+}
+
+

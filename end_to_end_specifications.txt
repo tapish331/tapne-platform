@@ -1,0 +1,260 @@
+Absolutely — I baked that rule into the README and also added a clean ASCII ER diagram for quick visual scanning. Here’s your updated, ready-to-paste `README.md`:
+
+```markdown
+# Tapne Platform
+
+**Tapne** is a travel platform MVP with a social twist — connecting people, trips, and experiences through curated discovery, detailed trip pages, and profile showcases.  
+This repository is the **full-stack monorepo** for Tapne, built with **Nest.js** (backend) and **Next.js App Router** (frontend), sharing code where possible.
+
+---
+
+## 📖 Project Overview
+
+**MVP Pages (5 total):**
+1. **Home** *(public)* – Trending & personalized trips/profiles (personalized sections hydrate when logged in)
+2. **Search** *(public)* – Trips & profiles (limited metadata); clicking into any result requires login
+3. **Trip** *(requires login)* – **Each trip has its own page**; owner CRUD; visitors view, bookmark, review
+4. **Profile** *(requires login)* – Showcase with two sections:  
+   - **Hero**: profile photo, username, pronouns, bio, travel style, follower/following counts, follow/unfollow  
+   - **Body**: upcoming trips, recent reviews received, previously organized trips, past trips attended; owner controls visibility of each section
+5. **Account** *(requires login)* – Manage login, password, email, sessions
+
+### 🔒 Access Control (Public vs Authenticated)
+
+Only **Homepage** and **Search** are accessible without authentication. **All other routes require login**.  
+Unauthenticated users:
+- Can browse Home and Search; Search returns **limited fields** (e.g., trip title, cover thumbnail, organizer username).  
+- Are **redirected to login** when attempting to view **Trip**, **Profile**, **Account**, or perform any write action.
+
+> **SEO & Robots**: Gated pages should include `noindex` and be excluded via `robots.txt` rules; OpenGraph tags can be generated but served only after auth.
+
+---
+
+## 🗄 Data Model (Core Entities & Relations)
+
+```
+
+User ──1───1─> Profile
+│             │
+│             └─ visibility settings for profile sections
+│
+├─1───M─> Trip (owner)
+│        ├─1───M─> TripReview (reviews for this trip)
+│        ├─M───M─> User (via Bookmark)
+│        └─M───M─> User (via Participation: past trips attended)
+│
+├─M───M─> Trip (via Bookmark)
+├─M───M─> User (via Follow)
+└─M───M─> User (via Block)
+
+TripReview ─ reviewer\_user\_id → User
+Follow ─ follower\_user\_id → User, followee\_user\_id → User
+Bookmark ─ user\_id → User, trip\_id → Trip
+Participation ─ user\_id → User, trip\_id → Trip
+Report ─ reporter\_user\_id → User
+Block ─ blocker\_user\_id → User, blocked\_user\_id → User
+
+```
+
+### 🧭 ASCII ER Diagram (High-Level)
+
+```
+
+┌──────────┐       1        1        ┌───────────┐
+│  User    │─────────────────────────>│  Profile  │
+└────┬─────┘                          └───────────┘
+│1
+│        owns (1─M)
+▼
+┌──────────┐    ┌───────────────────────────┐
+│   Trip   │<──>│ Bookmark (M─M User↔Trip) │
+└───┬──────┘    └───────────────────────────┘
+│1
+│      reviewed by (1─M)            attends (M─M)
+▼                                   ▲
+┌─────────────┐                         │
+│ TripReview  │                         │
+└─────────────┘              ┌────────────────────────────┐
+│ Participation (M─M User↔Trip)│
+└────────────────────────────┘
+
+User relations:
+• Follow (User↔User)      • Block (User↔User)      • Report (User reports content/user)
+
+````
+
+---
+
+## 🏗 Architecture
+
+**Backend – Nest.js**
+- Scoped logic only in `backend/domains/<domain>/<module>/` (co-located)
+- All other backend folders are unscoped (shared, config, etc.)
+
+**Frontend – Next.js App Router**
+- Scoped logic only in `frontend/web/features/<feature>/` (co-located)
+- All other frontend folders are unscoped (shared, config, etc.)
+
+**Shared**
+- `shared/` contains TypeScript code, types, and utilities used by both backend and frontend
+
+---
+
+## 🔐 Routing & Auth Gatekeeping
+
+**Public routes:** `/` (Home), `/search`  
+**Auth-required routes:** `/trip/:id`, `/profile/:username`, `/account`, all API write endpoints.
+
+**Frontend enforcement (Next.js Middleware):**
+```ts
+// frontend/web/middleware.ts
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+
+const PUBLIC_PATHS = ['/', '/search', '/api/auth', '/_next', '/assets'];
+
+export function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl;
+  const isPublic = PUBLIC_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'));
+  if (isPublic) return NextResponse.next();
+
+  const hasSession = Boolean(req.cookies.get('tapne_session')?.value);
+  if (!hasSession) {
+    const loginUrl = new URL('/account/login', req.url);
+    loginUrl.searchParams.set('next', pathname);
+    return NextResponse.redirect(loginUrl);
+  }
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: ['/((?!_next|assets).*)'],
+};
+````
+
+**Backend enforcement (Nest.js Guards):**
+
+* Apply `JwtAuthGuard` to all non-public controllers; expose only health checks and read-only search endpoints publicly.
+* Rate-limit public search/read endpoints.
+
+---
+
+## 📂 Directory Structure
+
+```
+tapne-platform/
+├── backend/              # Nest.js backend
+│   └── domains/          # Domain-scoped modules
+├── frontend/
+│   └── web/              # Next.js App Router frontend
+│       └── features/     # Feature-scoped components & logic
+└── shared/               # Shared code (types, utils, constants)
+```
+
+---
+
+## ⚙️ Tech Stack
+
+**Backend:** Nest.js, TypeScript
+**Frontend:** Next.js (App Router), TypeScript
+**Database:** PostgreSQL (recommended)
+**Auth:** JWT + email/password (with verification)
+**Media Storage:** CDN-backed (e.g., AWS S3 + CloudFront)
+**Styling:** Tailwind CSS (recommended for MVP speed)
+**Deployment:** Containerized (Docker), CI/CD ready
+
+---
+
+## ✅ Global Must-Haves
+
+* Media uploads (trip cover image, profile photo) with CDN + thumbnailing
+* **Auth hygiene:** email verification, password reset, session expiry, rate limiting, CAPTCHA on signup
+* **Access policy:** *Only Home and Search are public; all other pages and write actions require login*
+* Moderation & abuse handling: report, block/mute, hide flagged content
+* Privacy controls: private trips, profile section visibility in search
+* Validation rules: one review per user per trip, owners can’t review own trips, unique usernames (case-insensitive), reserved handles
+* Pagination & sorting for all lists; SEO-friendly slugs and OpenGraph tags *(noindex on gated pages)*
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+* Node.js >= 18
+* npm or yarn
+* PostgreSQL
+* Docker (optional but recommended)
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/<your-org>/tapne-platform.git
+cd tapne-platform
+```
+
+### 2. Install dependencies
+
+```bash
+npm install
+# or
+yarn install
+```
+
+### 3. Environment setup
+
+Create `.env` files for:
+
+* `backend/.env`
+* `frontend/web/.env`
+
+Example `.env` for backend:
+
+```env
+DATABASE_URL=postgres://user:password@localhost:5432/tapne
+JWT_SECRET=supersecret
+MEDIA_CDN_URL=https://cdn.example.com
+EMAIL_SMTP_URL=smtp://user:pass@smtp.example.com
+```
+
+### 4. Run the app (dev mode)
+
+```bash
+# Run backend
+cd backend
+npm run start:dev
+
+# Run frontend
+cd ../frontend/web
+npm run dev
+```
+
+---
+
+## 🧪 Testing
+
+Run unit tests:
+
+```bash
+npm run test
+```
+
+Run e2e tests:
+
+```bash
+npm run test:e2e
+```
+
+---
+
+## 📜 License
+
+MIT License – see [LICENSE](LICENSE) file for details.
+
+---
+
+## 🔖 Topics
+
+`travel` `social-platform` `fullstack` `nextjs` `nestjs` `typescript` `monorepo` `mvp` `web-app`
+
+```

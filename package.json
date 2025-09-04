@@ -1,0 +1,26 @@
+{
+  "name": "tapne-platform",
+  "private": true,
+  "scripts": {
+    "verify:tasks": "node scripts/verify-task-files.mjs",
+    "test:all": "node scripts/run-all-tests.mjs",
+    "test": "vitest --run",
+    "test:e2e": "playwright test -c tests/e2e/playwright.config.ts",
+    "lint": "eslint . --ext .ts,.tsx,.js,.jsx --max-warnings=0",
+    "format": "prettier --check .",
+    "format:write": "prettier --write .",
+    "dev:all": "node -e \"console.log('dev:all placeholder - backend/frontend not yet scaffolded')\""
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.45.0",
+    "@prisma/client": "^6.15.0",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-import": "^2.29.1",
+    "eslint-plugin-unused-imports": "^3.1.0",
+    "prettier": "^3.2.5",
+    "prisma": "^6.15.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.5.0"
+  }
+}

@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Minimal global styles for T15 bootstrap */
+:root { --tapne-fg: #111827; --tapne-bg: #ffffff; }
+html, body { height: 100%; }
+body { color: var(--tapne-fg); background: var(--tapne-bg); }
+

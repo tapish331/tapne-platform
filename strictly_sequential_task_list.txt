@@ -1,0 +1,403 @@
+Below is a strictly sequential, end-to-end task plan. Each task lists files to touch, plus a focused unit/integration test and an e2e test you can run right away. (Paths assume the monorepo layout from your README.)
+
+---
+
+### T01 — Monorepo & Tooling Bootstrap
+
+**Description:** Initialize root configs, scripts, lint/format, test runners, Playwright scaffolding, and shared TS config.
+**Files to touch (with purpose):**
+
+* `package.json` — root scripts: `test`, `test:e2e`, `lint`, `format`, `dev:all`
+* `.editorconfig`, `.gitignore`, `.gitattributes` — repo hygiene
+* `tsconfig.base.json` — shared TS settings
+* `tests/e2e/playwright.config.ts` — e2e server hooks, baseURLs
+* `tests/e2e/fixtures/env.ts` — helper to load `.env` for e2e
+* `.prettierrc`, `.eslintrc.cjs` — formatting & lint rules
+  **Task test:** `backend/src/__tests__/repo.smoke.spec.ts`
+  **Run:** `cd backend && npm run test -- src/__tests__/repo.smoke.spec.ts`
+  **E2E test:** `tests/e2e/T01-bootstrap.spec.ts`
+  **Run:** `npm run test:e2e -- tests/e2e/T01-bootstrap.spec.ts`
+
+---
+
+### T02 — Backend Bootstrap (Nest) + Health
+
+**Description:** Scaffold Nest app, enable CORS, Helmet, versioning, and a `/health` endpoint.
+**Files to touch:**
+
+* `backend/src/main.ts` — bootstrap, CORS, Helmet, global pipes
+* `backend/src/app.module.ts` — root module
+* `backend/src/health/health.controller.ts` — `GET /health`
+* `backend/package.json` — `start:dev`, `test` scripts
+  **Task test:** `backend/src/health/__tests__/health.controller.spec.ts`
+  **Run:** `cd backend && npm run test -- src/health/__tests__/health.controller.spec.ts`
+  **E2E test:** `tests/e2e/T02-health.spec.ts`
+  **Run:** `npm run test:e2e -- tests/e2e/T02-health.spec.ts`
+
+---
+
+### T03 — Database & Prisma Schema
+
+**Description:** Install Prisma, model core entities, generate client, first migration.
+**Files to touch:**
+
+* `backend/prisma/schema.prisma` — User, Profile, Trip, TripReview, Follow, Bookmark, Participation, Report, Block, Token
+* `backend/src/prisma/prisma.module.ts` / `prisma.service.ts` — Nest provider
+* `backend/.env` — `DATABASE_URL`
+  **Task test:** `backend/src/prisma/__tests__/prisma.service.spec.ts`
+  **Run:** `cd backend && npm run test -- src/prisma/__tests__/prisma.service.spec.ts`
+  **E2E test:** `tests/e2e/T03-db-migration.spec.ts`
+  **Run:** `npm run test:e2e -- tests/e2e/T03-db-migration.spec.ts`
+
+---
+
+### T04 — Auth Core (Signup/Login/JWT/Hashing)
+
+**Description:** Email+password auth, JWT access+refresh, secure cookies.
+**Files to touch:**
+
+* `backend/domains/auth/auth.module.ts|controller.ts|service.ts`
+* `backend/domains/auth/dto/*.ts` — signup/login DTOs
+* `backend/domains/auth/strategies/jwt.strategy.ts` — access token
+* `backend/domains/auth/guards/jwt.guard.ts`
+* `backend/src/config/cookies.ts` — cookie flags
+  **Task test:** `backend/domains/auth/__tests__/auth.service.spec.ts`
+  **Run:** `cd backend && npm run test -- domains/auth/__tests__/auth.service.spec.ts`
+  **E2E test:** `tests/e2e/T04-auth-basic.spec.ts`
+  **Run:** `npm run test:e2e -- tests/e2e/T04-auth-basic.spec.ts`
+
+---
+
+### T05 — Email Verification & Password Reset
+
+**Description:** Token issuance, SMTP sender, verification & reset endpoints.
+**Files to touch:**
+
+* `backend/domains/auth/email/email.service.ts` — SMTP client & templates
+* `backend/domains/auth/email/templates/{verify.html,reset.html}`
+* `backend/domains/auth/controllers/email.controller.ts`
+* `backend/prisma/schema.prisma` — `Token` model (verify/reset)
+  **Task test:** `backend/domains/auth/__tests__/email-flows.spec.ts`
+  **Run:** `cd backend && npm run test -- domains/auth/__tests__/email-flows.spec.ts`
+  **E2E test:** `tests/e2e/T05-auth-email.spec.ts`
+  **Run:** `npm run test:e2e -- tests/e2e/T05-auth-email.spec.ts`
+
+---
+
+### T06 — Security Hardening (Rate Limit, CAPTCHA, Headers)
+
+**Description:** Rate limit public endpoints, add signup CAPTCHA verification, strict headers.
+**Files to touch:**
+
+* `backend/src/security/rate-limit.guard.ts`
+* `backend/src/security/captcha.service.ts` — verify token
+* `backend/src/main.ts` — tighten Helmet, trust proxy
+  **Task test:** `backend/src/security/__tests__/rate-limit.spec.ts`
+  **Run:** `cd backend && npm run test -- src/security/__tests__/rate-limit.spec.ts`
+  **E2E test:** `tests/e2e/T06-security.spec.ts`
+  **Run:** `npm run test:e2e -- tests/e2e/T06-security.spec.ts`
+
+---
+
+### T07 — Media Service (S3 + Thumbs)
+
+**Description:** Presigned uploads for images; generate thumbnails on upload webhook.
+**Files to touch:**
+
+* `backend/src/media/media.module.ts|service.ts|controller.ts`
+* `backend/src/media/image.processor.ts` — sharp thumbnailer
+* `backend/.env` — `S3_*`, `MEDIA_CDN_URL`
+  **Task test:** `backend/src/media/__tests__/media.service.spec.ts`
+  **Run:** `cd backend && npm run test -- src/media/__tests__/media.service.spec.ts`
+  **E2E test:** `tests/e2e/T07-media-upload.spec.ts`
+  **Run:** `npm run test:e2e -- tests/e2e/T07-media-upload.spec.ts`
+
+---
+
+### T08 — Profiles Domain (CRUD, Reserved Handles, Visibility)
+
+**Description:** Create/update profile, unique usernames (case-insensitive), reserved handles, per-section visibility.
+**Files to touch:**
+
+* `backend/domains/profile/profile.module.ts|service.ts|controller.ts`
+* `backend/domains/profile/dto/*.ts`
+* `backend/prisma/schema.prisma` — unique index (lower(username))
+* `shared/types/profile.ts` — shared contracts
+  **Task test:** `backend/domains/profile/__tests__/profile.rules.spec.ts`
+  **Run:** `cd backend && npm run test -- domains/profile/__tests__/profile.rules.spec.ts`
+  **E2E test:** `tests/e2e/T08-profile-crud.spec.ts`
+  **Run:** `npm run test:e2e -- tests/e2e/T08-profile-crud.spec.ts`
+
+---
+
+### T09 — Trips Domain (CRUD, Privacy, Slugs, Pagination)
+
+**Description:** Trip create/edit, private flag, SEO slug, list with pagination/sort.
+**Files to touch:**
+
+* `backend/domains/trip/trip.module.ts|service.ts|controller.ts`
+* `backend/domains/trip/dto/*.ts`
+* `shared/types/trip.ts` — shared contracts
+* `backend/src/utils/slug.ts` — slug generator
+  **Task test:** `backend/domains/trip/__tests__/trip.crud.spec.ts`
+  **Run:** `cd backend && npm run test -- domains/trip/__tests__/trip.crud.spec.ts`
+  **E2E test:** `tests/e2e/T09-trip-crud.spec.ts`
+  **Run:** `npm run test:e2e -- tests/e2e/T09-trip-crud.spec.ts`
+
+---
+
+### T10 — Reviews Domain (1 per User per Trip; Owner Restriction)
+
+**Description:** Enforce review uniqueness and owner-cannot-review rule.
+**Files to touch:**
+
+* `backend/domains/review/review.module.ts|service.ts|controller.ts`
+* `backend/domains/review/dto/*.ts`
+* `backend/prisma/schema.prisma` — composite unique (tripId, userId)
+  **Task test:** `backend/domains/review/__tests__/review.rules.spec.ts`
+  **Run:** `cd backend && npm run test -- domains/review/__tests__/review.rules.spec.ts`
+  **E2E test:** `tests/e2e/T10-review-flow.spec.ts`
+  **Run:** `npm run test:e2e -- tests/e2e/T10-review-flow.spec.ts`
+
+---
+
+### T11 — Social Graph: Follow/Unfollow + Counts
+
+**Description:** Follow/unfollow endpoints, follower/following counts.
+**Files to touch:**
+
+* `backend/domains/social/follow.controller.ts|service.ts|follow.module.ts`
+* `shared/types/social.ts`
+  **Task test:** `backend/domains/social/__tests__/follow.spec.ts`
+  **Run:** `cd backend && npm run test -- domains/social/__tests__/follow.spec.ts`
+  **E2E test:** `tests/e2e/T11-follow.spec.ts`
+  **Run:** `npm run test:e2e -- tests/e2e/T11-follow.spec.ts`
+
+---
+
+### T12 — Bookmarks & Participation
+
+**Description:** Bookmark trips; join/leave participation; list past trips attended for profile body.
+**Files to touch:**
+
+* `backend/domains/trip/bookmark.controller.ts|service.ts`
+* `backend/domains/trip/participation.controller.ts|service.ts`
+  **Task test:** `backend/domains/trip/__tests__/bookmark-participation.spec.ts`
+  **Run:** `cd backend && npm run test -- domains/trip/__tests__/bookmark-participation.spec.ts`
+  **E2E test:** `tests/e2e/T12-bookmark-participation.spec.ts`
+  **Run:** `npm run test:e2e -- tests/e2e/T12-bookmark-participation.spec.ts`
+
+---
+
+### T13 — Moderation: Report & Block/Mute Enforcement
+
+**Description:** Report users/trips; block/mute hides content in lists & interactions.
+**Files to touch:**
+
+* `backend/domains/moderation/moderation.module.ts|service.ts|controller.ts`
+* Query filters added in `trip.service.ts`, `profile.service.ts` to exclude blocked
+  **Task test:** `backend/domains/moderation/__tests__/moderation.spec.ts`
+  **Run:** `cd backend && npm run test -- domains/moderation/__tests__/moderation.spec.ts`
+  **E2E test:** `tests/e2e/T13-moderation.spec.ts`
+  **Run:** `npm run test:e2e -- tests/e2e/T13-moderation.spec.ts`
+
+---
+
+### T14 — Public Search (Limited Fields) vs Auth Search (Full)
+
+**Description:** `/search` returns limited fields unauthenticated, full fields with auth; pagination/sort; rate limited.
+**Files to touch:**
+
+* `backend/domains/search/search.controller.ts|service.ts`
+* `shared/types/search.ts` — result contracts (public vs full)
+  **Task test:** `backend/domains/search/__tests__/search.visibility.spec.ts`
+  **Run:** `cd backend && npm run test -- domains/search/__tests__/search.visibility.spec.ts`
+  **E2E test:** `tests/e2e/T14-search-public-auth.spec.ts`
+  **Run:** `npm run test:e2e -- tests/e2e/T14-search-public-auth.spec.ts`
+
+---
+
+### T15 — Frontend Bootstrap (Next App, Tailwind, Layout)
+
+**Description:** Initialize Next App Router, Tailwind, base layout, env wiring.
+**Files to touch:**
+
+* `frontend/web/next.config.mjs`
+* `frontend/web/tailwind.config.ts`, `postcss.config.js`, `styles/globals.css`
+* `frontend/web/app/layout.tsx`, `app/page.tsx` (shell)
+* `frontend/web/package.json` — `dev`, `build`, `test`
+  **Task test:** `frontend/web/__tests__/layout.render.test.tsx`
+  **Run:** `cd frontend/web && npm run test -- __tests__/layout.render.test.tsx`
+  **E2E test:** `tests/e2e/T15-frontend-bootstrap.spec.ts`
+  **Run:** `npm run test:e2e -- tests/e2e/T15-frontend-bootstrap.spec.ts`
+
+---
+
+### T16 — Auth Pages + Client Session + Route Gating Middleware
+
+**Description:** Login/Signup/Verify/Reset pages; API client; cookies; Next middleware to gate routes.
+**Files to touch:**
+
+* `frontend/web/app/account/(auth)/login/page.tsx`
+* `frontend/web/app/account/(auth)/signup/page.tsx`
+* `frontend/web/app/account/(auth)/verify/page.tsx`
+* `frontend/web/app/account/(auth)/reset/page.tsx`
+* `frontend/web/lib/api.ts` — fetch helpers with cookies
+* `frontend/web/middleware.ts` — public vs protected (Home/Search public)
+  **Task test:** `frontend/web/features/account/__tests__/login.form.test.tsx`
+  **Run:** `cd frontend/web && npm run test -- features/account/__tests__/login.form.test.tsx`
+  **E2E test:** `tests/e2e/T16-auth-ui.spec.ts`
+  **Run:** `npm run test:e2e -- tests/e2e/T16-auth-ui.spec.ts`
+
+---
+
+### T17 — Home Page (Public + Personalized on Login)
+
+**Description:** Public sections render; when logged in, show personalized carousels.
+**Files to touch:**
+
+* `frontend/web/app/page.tsx` — Home composition
+* `frontend/web/features/home/*` — cards, loaders
+* `frontend/web/lib/server/home.queries.ts` — fetchers
+  **Task test:** `frontend/web/features/home/__tests__/home.render.test.tsx`
+  **Run:** `cd frontend/web && npm run test -- features/home/__tests__/home.render.test.tsx`
+  **E2E test:** `tests/e2e/T17-home-personalized.spec.ts`
+  **Run:** `npm run test:e2e -- tests/e2e/T17-home-personalized.spec.ts`
+
+---
+
+### T18 — Search Page (Public Limited → Full on Auth)
+
+**Description:** Public search shows limited fields; on login, shows full fields and actions (bookmark).
+**Files to touch:**
+
+* `frontend/web/app/search/page.tsx`
+* `frontend/web/features/search/*` — filters, result list
+* `frontend/web/lib/server/search.queries.ts`
+  **Task test:** `frontend/web/features/search/__tests__/search.visibility.test.tsx`
+  **Run:** `cd frontend/web && npm run test -- features/search/__tests__/search.visibility.test.tsx`
+  **E2E test:** `tests/e2e/T18-search-visibility.spec.ts`
+  **Run:** `npm run test:e2e -- tests/e2e/T18-search-visibility.spec.ts`
+
+---
+
+### T19 — Trip Page (Protected) + Owner CRUD + Reviews + Bookmark
+
+**Description:** Protected trip detail with owner edit; create flow; user review; bookmark toggle.
+**Files to touch:**
+
+* `frontend/web/app/trip/[slug]/page.tsx`
+* `frontend/web/features/trip/{TripView,ReviewForm,OwnerEditor}.tsx`
+* `frontend/web/app/trip/new/page.tsx`
+* `frontend/web/lib/server/trip.mutations.ts`
+  **Task test:** `frontend/web/features/trip/__tests__/trip.actions.test.tsx`
+  **Run:** `cd frontend/web && npm run test -- features/trip/__tests__/trip.actions.test.tsx`
+  **E2E test:** `tests/e2e/T19-trip-crud-review.spec.ts`
+  **Run:** `npm run test:e2e -- tests/e2e/T19-trip-crud-review.spec.ts`
+
+---
+
+### T20 — Profile Page (Protected) + Visibility Toggles + Follow
+
+**Description:** Hero/body sections with per-section visibility; follow/unfollow and counts.
+**Files to touch:**
+
+* `frontend/web/app/profile/[username]/page.tsx`
+* `frontend/web/features/profile/{Hero,Body,VisibilityToggles}.tsx`
+* `frontend/web/lib/server/profile.mutations.ts`
+  **Task test:** `frontend/web/features/profile/__tests__/profile.visibility.test.tsx`
+  **Run:** `cd frontend/web && npm run test -- features/profile/__tests__/profile.visibility.test.tsx`
+  **E2E test:** `tests/e2e/T20-profile-follow.spec.ts`
+  **Run:** `npm run test:e2e -- tests/e2e/T20-profile-follow.spec.ts`
+
+---
+
+### T21 — Upload UI (Presigned) for Profile Photo & Trip Cover
+
+**Description:** Drag-and-drop uploader using presigned URLs; thumbnail previews; optimistic updates.
+**Files to touch:**
+
+* `frontend/web/features/media/UploadImage.tsx`
+* `frontend/web/lib/server/media.client.ts` — presign + confirm
+* Integrations in `features/profile/Hero.tsx`, `features/trip/OwnerEditor.tsx`
+  **Task test:** `frontend/web/features/media/__tests__/upload.widget.test.tsx`
+  **Run:** `cd frontend/web && npm run test -- features/media/__tests__/upload.widget.test.tsx`
+  **E2E test:** `tests/e2e/T21-upload-images.spec.ts`
+  **Run:** `npm run test:e2e -- tests/e2e/T21-upload-images.spec.ts`
+
+---
+
+### T22 — SEO/Slugs/OG & Robots (Noindex on Gated)
+
+**Description:** SEO-friendly slugs, OG tags; `noindex` on authenticated-only pages; `robots.txt` rules.
+**Files to touch:**
+
+* `frontend/web/app/robots.ts` — disallow protected routes
+* `frontend/web/app/trip/[slug]/opengraph-image.tsx`
+* `frontend/web/app/profile/[username]/opengraph-image.tsx`
+* `frontend/web/app/(seo)/sitemap.ts` — only public
+  **Task test:** `frontend/web/__tests__/seo.flags.test.ts`
+  **Run:** `cd frontend/web && npm run test -- __tests__/seo.flags.test.ts`
+  **E2E test:** `tests/e2e/T22-seo-noindex.spec.ts`
+  **Run:** `npm run test:e2e -- tests/e2e/T22-seo-noindex.spec.ts`
+
+---
+
+### T23 — Moderation UX Hooks (Report/Block) + Filtering
+
+**Description:** Add report/block buttons in UI; ensure lists respect blocks; confirm dialogs.
+**Files to touch:**
+
+* `frontend/web/features/moderation/{ReportButton,BlockButton}.tsx`
+* Wire into `TripView`, `Profile/Hero`, `Search` list items
+  **Task test:** `frontend/web/features/moderation/__tests__/moderation.ui.test.tsx`
+  **Run:** `cd frontend/web && npm run test -- features/moderation/__tests__/moderation.ui.test.tsx`
+  **E2E test:** `tests/e2e/T23-moderation-ui.spec.ts`
+  **Run:** `npm run test:e2e -- tests/e2e/T23-moderation-ui.spec.ts`
+
+---
+
+### T24 — Observability & Errors
+
+**Description:** Structured logging, request IDs, error boundaries, frontend toasts, backend exception filters.
+**Files to touch:**
+
+* `backend/src/common/logging.interceptor.ts`
+* `backend/src/common/http-exception.filter.ts`
+* `frontend/web/app/error.tsx`, `frontend/web/app/global-error.tsx`
+* `frontend/web/lib/log.ts`
+  **Task test:** `backend/src/common/__tests__/exception.filter.spec.ts`
+  **Run:** `cd backend && npm run test -- src/common/__tests__/exception.filter.spec.ts`
+  **E2E test:** `tests/e2e/T24-errors-observability.spec.ts`
+  **Run:** `npm run test:e2e -- tests/e2e/T24-errors-observability.spec.ts`
+
+---
+
+### T25 — Docker Compose, Seeds, CI
+
+**Description:** Compose Postgres/backend/frontend, seed scripts, CI pipeline for lint/test/e2e.
+**Files to touch:**
+
+* `docker-compose.yml` — db, backend, frontend, localstack (optional for S3)
+* `backend/prisma/seed.ts` — demo users, trips
+* `.github/workflows/ci.yml` — install, build, unit, e2e (Playwright)
+  **Task test:** `backend/src/__tests__/seed.spec.ts`
+  **Run:** `cd backend && npm run test -- src/__tests__/seed.spec.ts`
+  **E2E test:** `tests/e2e/T25-full-happy-path.spec.ts`
+  **Run:** `npm run test:e2e -- tests/e2e/T25-full-happy-path.spec.ts`
+
+---
+
+## Notes on Commands
+
+* **Unit/Integration:** Adjust test runner flags as needed; paths are explicit so they’ll run only that spec.
+* **E2E:** Root script assumed:
+
+  ```json
+  // package.json
+  { "scripts": { "test:e2e": "playwright test" } }
+  ```
+
+  Each task lists a single spec; you can always run the full suite with `npm run test:e2e`.
+
+If you want, I can also drop minimal placeholder files for each test so your team can “green-bar” as you implement each task.
